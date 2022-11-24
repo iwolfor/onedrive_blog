@@ -24,11 +24,19 @@
             <div v-if="contentType === 'html'">
                 <iframe class="w-full" style="height: calc(100vh - 8.5rem)" :srcdoc="content" />
             </div>
-            <div v-else-if="contentType === 'md'">
+            <div v-else-if="contentType === 'md' || contentType === 'markdown'">
                 <div class="dark:text-green-100 dark:bg-dark markdown-body w-full" v-html="content" />
             </div>
             <div v-else-if="contentType === 'txt'">
                 <div class="dark:text-green-100" style="white-space: pre-wrap;" v-text="content" />
+            </div>
+            <div v-else-if="contentType === 'url'">
+                <iframe class="w-full" style="height: calc(100vh - 8.5rem)" :src="content" />
+            </div>
+            <div v-else-if="contentType === 'redirect'">
+                <div class="dark:text-green-100" style="white-space: pre-wrap; text-align: center;">
+                    即将跳转至 <span class="text-green-800 dark:text-green-100">{{ content }}</span>
+                </div>
             </div>
         </div>
     </div>
@@ -44,14 +52,18 @@ const errorMessage = useErrorMessage()
 import axios from 'axios'
 import { marked } from 'marked'
 
+definePageMeta({
+    layout: "home",
+});
+
 export default {
     name: '[id]',
-    layout: 'home',
     data () {
         return {
             content: '',
             contentType: 'txt',
             settings: {},
+            files: [],
             password: false,
             statusCode: 200,
             myPassword: '',
@@ -74,11 +86,24 @@ export default {
             const getContent = (c) => this.content = c
             const getContentType = (t) => {
                 this.contentType = t
-                if (t === 'md' || t === 'MD') {
-                    this.content = marked.parse(this.content)
+                if (this.contentType === 'redirect') {
+                    window.location.href = this.content
                 }
+                if (t === 'md' || t === 'markdown' || t === 'html') {
+                    if (t === 'md' || t === 'markdown') {
+                        this.content = marked.parse(this.content)
+                    }
+                    for (const f of this.files) {
+                        this.content = this.content.replaceAll('src="' + f.name, 'src="' + f.url)
+                        this.content = this.content.replaceAll('src="./' + f.name, 'src="./' + f.url)
+                        this.content = this.content.replaceAll('href="' + f.name, 'href="' + f.url)
+                        this.content = this.content.replaceAll('href="./' + f.name, 'href="./' + f.url)
+                    }
+                }
+
             }
             const getSettings = (s) => this.settings = s
+            const getFiles = (f) => this.files = f
             const needPassword = () => {
                 this.password = true
                 if (this.myPassword !== '') {
@@ -109,6 +134,7 @@ export default {
                 if (!response.data.password) {
                     noNeedPassword()
                     getSettings(response.data.settings)
+                    getFiles(response.data.files)
                     if (response.data.contentUrl === '') {
                         getContent('文件缺失，请等待同步')
                         stopLoading(1)
